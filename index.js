@@ -7,7 +7,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:5173'],
+    origin: [process.env.APP_URL],
   }
 });
 
@@ -145,6 +145,6 @@ app.use(morgan("tiny"));
 
 const port = process.env.PORT || 3000;
 
-httpServer.listen(port, '0.0.0.0', () => {
+httpServer.listen(port, () => {
   console.log(`Express server listening on port ${port}`);
 });
