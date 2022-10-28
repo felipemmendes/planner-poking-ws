@@ -131,6 +131,10 @@ io.on("connection", (socket) => {
         users.push(s.data[roomId].user);
       }
       io.to(roomId).emit("updateUsers", users);
+
+      if (users.length === 0) {
+        delete rooms[roomId];
+      }
     }
   });
 });
