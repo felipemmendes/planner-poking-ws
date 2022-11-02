@@ -56,7 +56,7 @@ io.on("connection", (socket) => {
       url: process.env.REDIS_URL,
     });
 
-    redisClient.set(room.id, JSON.stringify(room));
+    await redisClient.set(room.id, JSON.stringify(room));
 
     await redisClient.disconnect();
   });
