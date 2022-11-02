@@ -2,7 +2,7 @@ const express = require("express");
 const morgan = require("morgan");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
-const { createClient } = require("redis");
+const { Redis } = require("@upstash/redis");
 
 const app = express();
 const httpServer = createServer(app);
@@ -18,7 +18,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("enterRoom", async (roomId) => {
-    const redisClient = createClient({
+    const redisClient = Redis({
       url: process.env.REDIS_URL,
     });
 
@@ -52,7 +52,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("createRoom", async (room) => {
-    const redisClient = createClient({
+    const redisClient = Redis({
       url: process.env.REDIS_URL,
     });
 
@@ -62,7 +62,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("leaveRoom", async (roomId) => {
-    const redisClient = createClient({
+    const redisClient = Redis({
       url: process.env.REDIS_URL,
     });
 
@@ -140,7 +140,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnecting", async () => {
-    const redisClient = createClient({
+    const redisClient = Redis({
       url: process.env.REDIS_URL,
     });
     for (const roomId of socket.rooms) {
