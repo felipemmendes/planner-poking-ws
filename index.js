@@ -2,6 +2,7 @@ const express = require("express");
 const morgan = require("morgan");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
+const { createClient } = require("redis");
 
 const app = express();
 const httpServer = createServer(app);
@@ -11,21 +12,26 @@ const io = new Server(httpServer, {
   }
 });
 
-const rooms = {}
-
 io.on("connection", (socket) => {
   socket.on("createUser", ({ roomId, user }) => {
     socket.data[roomId] = { user }
   });
 
   socket.on("enterRoom", async (roomId) => {
-    if (!rooms[roomId]) {
+    const redisClient = createClient({
+      url: process.env.REDIS_URL,
+    });
+
+    let roomConfig = await redisClient.get(roomId);
+    if (!roomConfig) {
       socket.emit("forbiddenRoom");
+      await redisClient.disconnect();
       return;
     }
 
     if (!socket.data[roomId]) {
       socket.emit("noUserFound");
+      await redisClient.disconnect();
       return;
     }
 
@@ -38,15 +44,32 @@ io.on("connection", (socket) => {
     }
 
     io.to(roomId).emit("updateUsers", users);
-    socket.emit("getRoom", { room: rooms[roomId], users, user: socket.data[roomId] });
+
+    roomConfig = JSON.parse(roomConfig);
+    socket.emit("getRoom", { room: roomConfig, users, user: socket.data[roomId] });
+
+    await redisClient.disconnect();
   });
 
-  socket.on("createRoom", (room) => {
-    rooms[room.id] = room;
+  socket.on("createRoom", async (room) => {
+    const redisClient = createClient({
+      url: process.env.REDIS_URL,
+    });
+
+    redisClient.set(room.id, room);
+
+    await redisClient.disconnect();
   });
 
   socket.on("leaveRoom", async (roomId) => {
-    if (!rooms[roomId]) {
+    const redisClient = createClient({
+      url: process.env.REDIS_URL,
+    });
+
+    let roomConfig = await redisClient.get(roomId);
+    await redisClient.disconnect();
+
+    if (!roomConfig) {
       return;
     }
 
@@ -117,8 +140,13 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnecting", async () => {
+    const redisClient = createClient({
+      url: process.env.REDIS_URL,
+    });
     for (const roomId of socket.rooms) {
-      if (!rooms[roomId]) {
+
+      let roomConfig = await redisClient.get(roomId);
+      if (!roomConfig) {
         continue;
       }
 
@@ -133,9 +161,11 @@ io.on("connection", (socket) => {
       io.to(roomId).emit("updateUsers", users);
 
       if (users.length === 0) {
-        delete rooms[roomId];
+        await redisClient.getDel(roomId);
       }
     }
+
+    await redisClient.disconnect();
   });
 });
 
