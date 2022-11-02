@@ -12,4 +12,5 @@ COPY . .
 ENV PORT=8080
 ENV APP_URL=https://planner-poking.fmmendes.com
 
+CMD [ "npx", "prisma", "generate" ]
 CMD [ "npm","start" ]
