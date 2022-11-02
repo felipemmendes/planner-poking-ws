@@ -56,9 +56,7 @@ io.on("connection", (socket) => {
       url: process.env.REDIS_URL,
     });
 
-    redisClient.on("error", (err) => console.error("Redis Client Error", err));
-
-    redisClient.set(room.id, room);
+    redisClient.set(room.id, JSON.stringify(room));
 
     await redisClient.disconnect();
   });
