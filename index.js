@@ -2,7 +2,7 @@ const express = require("express");
 const morgan = require("morgan");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
-const { Redis } = require("@upstash/redis");
+const Redis = require("ioredis");
 
 const app = express();
 const httpServer = createServer(app);
@@ -12,26 +12,29 @@ const io = new Server(httpServer, {
   }
 });
 
+const redisClient = new Redis(process.env.REDIS_URL, {
+  lazyConnect: true
+});
+
+
+
 io.on("connection", (socket) => {
   socket.on("createUser", ({ roomId, user }) => {
     socket.data[roomId] = { user }
   });
 
   socket.on("enterRoom", async (roomId) => {
-    const redisClient = Redis({
-      url: process.env.REDIS_URL,
-    });
-
+    await redisClient.connect();
     let roomConfig = await redisClient.get(roomId);
+    await redisClient.quit();
+
     if (!roomConfig) {
       socket.emit("forbiddenRoom");
-      await redisClient.disconnect();
       return;
     }
 
     if (!socket.data[roomId]) {
       socket.emit("noUserFound");
-      await redisClient.disconnect();
       return;
     }
 
@@ -47,27 +50,18 @@ io.on("connection", (socket) => {
 
     roomConfig = JSON.parse(roomConfig);
     socket.emit("getRoom", { room: roomConfig, users, user: socket.data[roomId] });
-
-    await redisClient.disconnect();
   });
 
   socket.on("createRoom", async (room) => {
-    const redisClient = Redis({
-      url: process.env.REDIS_URL,
-    });
-
+    await redisClient.connect();
     await redisClient.set(room.id, JSON.stringify(room));
-
-    await redisClient.disconnect();
+    await redisClient.quit();
   });
 
   socket.on("leaveRoom", async (roomId) => {
-    const redisClient = Redis({
-      url: process.env.REDIS_URL,
-    });
-
+    await redisClient.connect();
     let roomConfig = await redisClient.get(roomId);
-    await redisClient.disconnect();
+    await redisClient.quit();
 
     if (!roomConfig) {
       return;
@@ -140,9 +134,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnecting", async () => {
-    const redisClient = Redis({
-      url: process.env.REDIS_URL,
-    });
+    await redisClient.connect();
     for (const roomId of socket.rooms) {
 
       let roomConfig = await redisClient.get(roomId);
@@ -161,11 +153,10 @@ io.on("connection", (socket) => {
       io.to(roomId).emit("updateUsers", users);
 
       if (users.length === 0) {
-        await redisClient.getDel(roomId);
+        await redisClient.del(roomId);
       }
     }
-
-    await redisClient.disconnect();
+    await redisClient.quit();
   });
 });
 
