@@ -2,7 +2,7 @@ const express = require("express");
 const morgan = require("morgan");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
-const Redis = require("ioredis");
+const { PrismaClient } = require("@prisma/client");
 
 const app = express();
 const httpServer = createServer(app);
@@ -12,11 +12,7 @@ const io = new Server(httpServer, {
   }
 });
 
-const redisClient = new Redis(process.env.REDIS_URL, {
-  lazyConnect: true
-});
-
-
+const prisma = new PrismaClient();
 
 io.on("connection", (socket) => {
   socket.on("createUser", ({ roomId, user }) => {
@@ -24,9 +20,14 @@ io.on("connection", (socket) => {
   });
 
   socket.on("enterRoom", async (roomId) => {
-    await redisClient.connect();
-    let roomConfig = await redisClient.get(roomId);
-    await redisClient.quit();
+    const roomConfig = await prisma.room.findUnique({
+      where: {
+        id: roomId
+      },
+      select: {
+        config: true
+      }
+    });
 
     if (!roomConfig) {
       socket.emit("forbiddenRoom");
@@ -48,20 +49,28 @@ io.on("connection", (socket) => {
 
     io.to(roomId).emit("updateUsers", users);
 
-    roomConfig = JSON.parse(roomConfig);
-    socket.emit("getRoom", { room: roomConfig, users, user: socket.data[roomId] });
+    const room = JSON.parse(roomConfig.config);
+    socket.emit("getRoom", { room, users, user: socket.data[roomId] });
   });
 
   socket.on("createRoom", async (room) => {
-    await redisClient.connect();
-    await redisClient.set(room.id, JSON.stringify(room));
-    await redisClient.quit();
+    await prisma.room.create({
+      data: {
+        id: room.id,
+        config: JSON.stringify(room),
+      }
+    });
   });
 
   socket.on("leaveRoom", async (roomId) => {
-    await redisClient.connect();
-    let roomConfig = await redisClient.get(roomId);
-    await redisClient.quit();
+    const roomConfig = await prisma.room.findUnique({
+      where: {
+        id: roomId
+      },
+      select: {
+        config: true
+      }
+    });
 
     if (!roomConfig) {
       return;
@@ -134,10 +143,16 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnecting", async () => {
-    await redisClient.connect();
     for (const roomId of socket.rooms) {
+      const roomConfig = await prisma.room.findUnique({
+        where: {
+          id: roomId
+        },
+        select: {
+          config: true
+        }
+      });
 
-      let roomConfig = await redisClient.get(roomId);
       if (!roomConfig) {
         continue;
       }
@@ -153,10 +168,9 @@ io.on("connection", (socket) => {
       io.to(roomId).emit("updateUsers", users);
 
       if (users.length === 0) {
-        await redisClient.del(roomId);
+        await prisma.room.delete({ where: { id: roomId } });
       }
     }
-    await redisClient.quit();
   });
 });
 

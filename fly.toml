@@ -5,6 +5,10 @@ kill_signal = "SIGINT"
 kill_timeout = 5
 processes = []
 
+[mounts]
+  source="volume_1"
+  destination="mnt/volume_1"
+
 [env]
   PORT = "8080"
 
